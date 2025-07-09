@@ -1,8 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-// const jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-// const authMiddleware = require('../middleware/authMiddleware');
+const authMiddleware = require('../middleware/authMiddleware');
 const router = express.Router();
 
 
@@ -55,21 +55,18 @@ router.post('/login', async (req,res)=>{
     const isMatch = await bcrypt.compare(password, user.password)
     if (!isMatch) return res.status(400).json({ message: 'Wrong password' });
 
+    const token = jwt.sign({ id: user._id }, 'secret123', { expiresIn: '8h' });
 
-      res.json({ message: 'Login successful' });
+    user.token = token;
+    await user.save();
+
+
+      res.json({ message: 'Login successful', token});
 } catch (err) {
         // console.error('Registration error:', err);
         res.status(500).json({ message: 'Server error' });
     }
-
-
 });
-
-
-
-
-
-
 
 
 module.exports = router;
