@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/authMiddleware');
+const sendEmail = require('../utils/sendEmail');
 const router = express.Router();
 
 
@@ -32,6 +33,21 @@ router.post('/register', async (req, res) => {
         const newUser = new User({ companyName, companyDomain, firstName, lastName, email, password: hashed });
         await newUser.save();
 
+
+        await sendEmail(
+        email,
+        '🎉 Registration Successful - Welcome Aboard!',
+        `Hello ${companyName},
+
+        Thank you for registering on our platform.
+
+         You are now registered as an "Owner". You can log in and start managing your team.
+
+         Regards,
+         TeamTrak`
+    );
+
+
         res.status(201).json({ message: 'Registered as owner' });
     } catch (err) {
         // console.error('Registration error:', err);
@@ -40,29 +56,29 @@ router.post('/register', async (req, res) => {
 });
 
 
-router.post('/login', async (req,res)=>{
+router.post('/login', async (req, res) => {
 
-    try{
+    try {
 
-    const {email, password} = req.body;
+        const { email, password } = req.body;
 
-    if(!email || !password)
-        return res.status(400).json({message: 'Required fields missing'});
-     
-    const user = await User.findOne({email})
-    if (!user) return res.status(404).json({ message: 'User not found' });
+        if (!email || !password)
+            return res.status(400).json({ message: 'Required fields missing' });
 
-    const isMatch = await bcrypt.compare(password, user.password)
-    if (!isMatch) return res.status(400).json({ message: 'Wrong password' });
+        const user = await User.findOne({ email })
+        if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const token = jwt.sign({ id: user._id }, 'secret123', { expiresIn: '8h' });
+        const isMatch = await bcrypt.compare(password, user.password)
+        if (!isMatch) return res.status(400).json({ message: 'Wrong password' });
 
-    user.token = token;
-    await user.save();
+        const token = jwt.sign({ id: user._id }, 'secret123', { expiresIn: '8h' });
+
+        user.token = token;
+        await user.save();
 
 
-      res.json({ message: 'Login successful', token});
-} catch (err) {
+        res.json({ message: 'Login successful', token });
+    } catch (err) {
         // console.error('Registration error:', err);
         res.status(500).json({ message: 'Server error' });
     }
