@@ -5,6 +5,8 @@ const User = require('../models/User');
 const authMiddleware = require('../middleware/authMiddleware');
 const sendEmail = require('../utils/sendEmail');
 const router = express.Router();
+const TeamMember = require('../models/TeamMember');
+
 
 
 router.post('/register', async (req, res) => {
@@ -35,17 +37,17 @@ router.post('/register', async (req, res) => {
 
 
         await sendEmail(
-        email,
-        '🎉 Registration Successful - Welcome Aboard!',
-        `Hello ${companyName},
+            email,
+            '🎉 Registration Successful - Welcome Aboard!',
+            `Hello ${companyName},
 
-        Thank you for registering on our platform.
+            Thank you for registering on our platform.
 
-         You are now registered as an "Owner". You can log in and start managing your team.
+            You are now registered as an "Owner". You can log in and start managing your team.
 
-         Regards,
-         TeamTrak`
-    );
+            Regards,
+            TeamTrak`
+        );
 
 
         res.status(201).json({ message: 'Registered as owner' });
@@ -56,33 +58,116 @@ router.post('/register', async (req, res) => {
 });
 
 
+// router.post('/login', async (req, res) => {
+    
+
+//     try {
+
+//         const { email, password } = req.body;
+
+//         if (!email || !password)
+//             return res.status(400).json({ message: 'Required fields missing' });
+
+//         const user = await User.findOne({ email })
+//         if (!user) return res.status(404).json({ message: 'User not found' });
+
+//         const isMatch = await bcrypt.compare(password, user.password)
+//         if (!isMatch) return res.status(400).json({ message: 'Wrong password' });
+
+//         const token = jwt.sign({ id: user._id }, 'secret123', { expiresIn: '8h' });
+
+//         user.token = token;
+//         await user.save();
+
+
+//         res.json({ message: 'Login successful', token });
+//     } catch (err) {
+//         // console.error('Registration error:', err);
+//         res.status(500).json({ message: 'Server error' });
+//     }
+// });
+
+
+
 router.post('/login', async (req, res) => {
-
     try {
-
         const { email, password } = req.body;
 
         if (!email || !password)
             return res.status(400).json({ message: 'Required fields missing' });
 
-        const user = await User.findOne({ email })
+        const user = await User.findOne({ email });
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        const isMatch = await bcrypt.compare(password, user.password)
+        const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({ message: 'Wrong password' });
 
-        const token = jwt.sign({ id: user._id }, 'secret123', { expiresIn: '8h' });
+        let token = user.token;
 
-        user.token = token;
-        await user.save();
+        
+        let isTokenValid = false;
+        if (token) {
+            try {
+                jwt.verify(token, 'secret123');
+                isTokenValid = true;
+            } catch (err) {
+                isTokenValid = false;
+            }
+        }
 
+        
+        if (!isTokenValid) {
+            token = jwt.sign({ id: user._id }, 'secret123', { expiresIn: '8h' });
+            user.token = token;
+            await user.save();
+        }
 
         res.json({ message: 'Login successful', token });
     } catch (err) {
-        // console.error('Registration error:', err);
         res.status(500).json({ message: 'Server error' });
     }
 });
+
+
+
+router.post('/update', authMiddleware, async (req, res) => {
+    const { companyName, companyDomain, email } = req.body;
+
+    const updated = await User.findByIdAndUpdate(
+        req.user._id,
+        { companyName, companyDomain, email },
+        { new: true }
+    ).select('-password');
+
+    res.json({ message: 'Updated', user: updated });
+});
+
+
+// DELETE /team-member/:email
+
+router.delete('/team-member/:email', authMiddleware, async (req, res) => {
+    try {
+        const { email } = req.params;
+        const ownerId = req.user.id;
+
+        const deleted = await TeamMember.findOneAndDelete({
+            email,
+            addedBy: ownerId
+        });
+
+
+        if (!deleted) {
+            return res.status(404).json({ message: 'Team member not found or already deleted.' });
+        }
+
+        res.status(200).json({ message: 'Team member deleted successfully.' });
+    } catch (error) {
+        console.error('Soft delete error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+
 
 
 module.exports = router;

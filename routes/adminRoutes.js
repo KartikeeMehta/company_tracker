@@ -2,9 +2,10 @@ const express = require('express');
 const TeamMember = require('../models/TeamMember');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-// const jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 const authMiddleware = require('../middleware/authMiddleware');
 const sendEmail = require('../utils/sendEmail');
+const teamAuthMiddleware = require('../middleware/teamAuthMiddleware');
 const router = express.Router();
 
 router.post('/add-team-member', authMiddleware, async (req, res) => {
@@ -121,8 +122,13 @@ router.post('/team-member-login', async (req, res) => {
     if (member.mustChangePassword)
         return res.status(400).json({ message: 'Please update your password first' });
 
+    const token = jwt.sign({ id: member._id }, 'secret123', { expiresIn: '8h' });
+    
+            member.token = token;
+            await member.save();
+
     res.status(200).json({
-        message: 'Login successful',
+        message: 'Login successful', token,
         member: {
             name: member.name,
             email: member.email
@@ -130,6 +136,17 @@ router.post('/team-member-login', async (req, res) => {
     });
 });
 
+router.post('/update-team-member', teamAuthMiddleware, async (req, res) => {
+    const { companyId, leadMember, project } = req.body;
+
+    const updated = await TeamMember.findByIdAndUpdate(
+        req.member._id,
+        { companyId, leadMember, project },
+        { new: true }
+    ).select('-password');
+
+    res.json({ message: 'Updated', member: updated });
+});
 
 
 
